@@ -5,6 +5,8 @@
 #include <winsock2.h>
 #include <thread>
 #include <mutex>
+#include <vector>
+#include <queue>
 
 WSADATA WSAData;
 SOCKET server, client;
@@ -12,59 +14,64 @@ int activeClient = 0;
 SOCKADDR_IN serverAddr, clientAddr;
 bool newConnectionNeeded = true;
 
-struct clientData {
+struct ClientData {
   SOCKET clientSocket;
   SOCKADDR_IN clientAddr;
   int clientAddrSize = sizeof(clientAddr);
   char buffer[1024];
-} clients[10];
+  int clientId;
+};// clients[10];
 
+std::vector<ClientData *> clients;
 std::mutex m;
 
 
 void newClient() {
-  //SOCKET clientSocket;
-  if ((clients[activeClient].clientSocket = accept(server, (SOCKADDR *) &clients[activeClient].clientAddr,
-                                                   &clients[activeClient].clientAddrSize)) != INVALID_SOCKET) {
+  clients.push_back(new ClientData);
+  ClientData *currentClient = clients[activeClient];
+  if ((currentClient->clientSocket = accept(server, (SOCKADDR *) &currentClient->clientAddr,
+                                            &currentClient->clientAddrSize)) != INVALID_SOCKET) {
     m.lock();
     newConnectionNeeded = true;
-    int clientId = activeClient;
+    currentClient->clientId = activeClient;
     std::string msg = " ";
-    msg = std::to_string(clientId);
-    send(clients[clientId].clientSocket, (char *) msg.c_str(), msg.size(), 0);
+    msg = std::to_string(currentClient->clientId);
+    send(currentClient->clientSocket, (char *) msg.c_str(), msg.size(), 0);
     activeClient++;
-    std::cout << "Client " << clientId << " connected!" << std::endl;
+    std::cout << "Client " << currentClient->clientId << " connected!" << std::endl;
     m.unlock();
     while (true) {
       //if(clients[clientId].clientSocket == INVALID_SOCKET){return;}
       //Sleep(500);
-      if (recv(clients[clientId].clientSocket, clients[clientId].buffer, sizeof(clients[clientId].buffer), 0) <= 0) {
+      if (recv(currentClient->clientSocket, currentClient->buffer, sizeof(currentClient->buffer), 0) <= 0) {
         return;
       }
 
       m.lock();
-      std::cout << std::endl << "Client " << clientId << " says: " << clients[clientId].buffer << std::flush;
+      std::cout << "Client " << currentClient->clientId << " says: " << currentClient->buffer << std::endl
+                << std::flush;
       msg = "Client";
-      msg += std::to_string(clientId);
+      msg += std::to_string(currentClient->clientId);
       msg += " says: ";
-      msg += clients[clientId].buffer;
+      msg += currentClient->buffer;
       //std::cout << msg;
-      memset(clients[clientId].buffer, 0, sizeof(clients[clientId].buffer));
+      memset(currentClient->buffer, 0, sizeof(currentClient->buffer));
       m.unlock();
 
       for (int i = 0; i < activeClient; ++i) {
-        if (i == clientId) {
+        if (i == currentClient->clientId) {
           continue;
         }
-        send(clients[i].clientSocket, (char *) msg.c_str(), sizeof(msg), 0);
+        send(clients[i]->clientSocket, (char *) msg.c_str(), sizeof(msg), 0);
       }
-      //Sleep(1000);
+
     }
   }
 }
 
 void connectionMaster() {
   while (true) {
+    Sleep(10);
     if (newConnectionNeeded) {
       std::thread clientListener(newClient);
       clientListener.detach();
@@ -90,9 +97,6 @@ int main() {
 
   std::thread connectorMasterLoop(connectionMaster);
   connectorMasterLoop.join();
-
-
-  // Sleep(1000000);
 
   return 0;
 }
