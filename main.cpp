@@ -11,7 +11,7 @@
 #include <queue>
 #include <utility>
 
-#define ALSO_LOG_TO_FILE
+//#define ALSO_LOG_TO_FILE
 const char *FILEPATH = "C:/Users/Administrator/Desktop/FileTest.txt";
 
 WSADATA WSAData;
@@ -51,6 +51,8 @@ void Client() {
   clientLock.unlock();
   if ((currentClient->clientSocket = accept(server, (SOCKADDR *) &currentClient->clientAddr,
                                             &currentClient->clientAddrSize)) != INVALID_SOCKET) {
+  	
+    memset(currentClient->buffer, 0, sizeof(currentClient->buffer));
     connBoolLock.lock();
     newConnectionNeeded = true;
     connBoolLock.unlock();
@@ -81,9 +83,8 @@ void Client() {
 
       memset(currentClient->buffer, 0, sizeof(currentClient->buffer));
 
-
       queueLock.lock();
-      MsgQueue.push(new Massage{currentClient->clientId, (char *) msg.c_str(), sizeof(msg)});
+      MsgQueue.push(new Massage{currentClient->clientId, (char *) msg.c_str(), (int)msg.size()});
       queueEmpty = false;
       queueLock.unlock();
     }
